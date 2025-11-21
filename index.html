@@ -71,7 +71,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 30%; /* 防止狀態文字太長擠壓按鈕 */
+            max-width: 30%; 
         }
 
         .pulse-dot {
@@ -117,7 +117,7 @@
 
         .final-text {
             display: block;
-            margin-bottom: 1.5rem; /* 空一行以增加閱讀體驗 */
+            margin-bottom: 1.5rem; 
             word-break: break-word;
         }
 
@@ -208,6 +208,23 @@
             font-weight: bold;
         }
 
+        /* Styled Select Box for Language */
+        select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background-color: rgba(255,255,255,0.1);
+            color: var(--text-color);
+            font-size: 16px;
+            outline: none;
+        }
+        
+        option {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
         /* Range Slider */
         input[type=range] {
             width: 100%;
@@ -252,7 +269,6 @@
             <span id="status-text">就緒</span>
         </div>
         <div class="toolbar">
-            <!-- 新增的清除按鈕 -->
             <button class="btn-pill" onclick="clearText()">清除</button>
             <button class="btn-pill" onclick="copyText()">複製</button>
             <button class="btn-pill" onclick="shareText()">分享</button>
@@ -265,17 +281,25 @@
         <div id="interim" class="interim-text"></div>
     </main>
 
-    <!-- Floating Action Button for Mic -->
     <div class="fab-container">
         <button id="toggle-btn" class="fab" onclick="toggleRecognition()">
             🎤
         </button>
     </div>
 
-    <!-- Settings Modal -->
     <dialog id="settings-modal">
         <h3 style="margin-top:0">設定</h3>
         
+        <div class="setting-group">
+            <label class="setting-label">辨識語言</label>
+            <select id="lang-select" onchange="updateLanguage(this.value)">
+                <option value="zh-TW">繁體中文 (台灣)</option>
+                <option value="en-US">English (US)</option>
+                <option value="ja-JP">日本語</option>
+                <option value="ko-KR">한국어 (韓文)</option>
+            </select>
+        </div>
+
         <div class="setting-group">
             <label class="setting-label">字體大小 (<span id="font-val">24</span>px)</label>
             <input type="range" min="16" max="60" value="24" id="font-size-slider" oninput="updateFontSize(this.value)">
@@ -296,7 +320,6 @@
     </dialog>
 
     <script>
-        // --- 變數初始化 ---
         const outputDiv = document.getElementById('output');
         const interimDiv = document.getElementById('interim');
         const statusText = document.getElementById('status-text');
@@ -307,33 +330,30 @@
         let recognition;
         let isListening = false;
         let wakeLock = null;
+        let currentLang = 'zh-TW'; // 預設語言
 
-        // --- 語音辨識設定 (Web Speech API) ---
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
-            recognition.continuous = true; // 持續辨識
-            recognition.interimResults = true; // 顯示中間結果
-            recognition.lang = 'zh-TW'; // 設定語言
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = currentLang; // 初始化語言
 
             recognition.onstart = function() {
                 isListening = true;
-                statusText.innerText = "正在聆聽";
+                statusText.innerText = "正在聆聽 (" + getLangLabel(recognition.lang) + ")";
                 micStatus.classList.add('active');
-                toggleBtn.innerHTML = "⬛"; // 顯示停止圖示
+                toggleBtn.innerHTML = "⬛"; 
                 toggleBtn.style.backgroundColor = "#ef4444";
-                requestWakeLock(); // 防止螢幕休眠
+                requestWakeLock();
             };
 
             recognition.onend = function() {
-                // 自動重連機制
                 if (isListening) {
                     console.log("連線中斷，嘗試重新啟動...");
                     try {
                         recognition.start();
-                    } catch (e) {
-                        console.error("重啟失敗:", e);
-                    }
+                    } catch (e) { console.error("重啟失敗:", e); }
                 } else {
                     statusText.innerText = "已暫停";
                     micStatus.classList.remove('active');
@@ -355,7 +375,6 @@
                     }
                 }
 
-                // 處理落地文字 (Final)
                 if (finalTranscript) {
                     const p = document.createElement('div');
                     p.className = 'final-text';
@@ -363,32 +382,25 @@
                     outputDiv.appendChild(p);
                 }
 
-                // 處理未落地文字 (Interim)
                 interimDiv.innerText = interimTranscript;
-
-                // 自動捲動到底部
                 scrollToBottom();
             };
 
             recognition.onerror = function(event) {
                 console.error("語音辨識錯誤", event.error);
-                if(event.error === 'no-speech') {
-                    // 忽略無聲錯誤
-                } else {
+                if(event.error !== 'no-speech') {
                     statusText.innerText = "錯誤: " + event.error;
                 }
             };
 
         } else {
-            alert("您的瀏覽器不支援語音辨識功能，請使用 Chrome, Edge 或 Safari。");
+            alert("您的瀏覽器不支援語音辨識功能。");
         }
-
-        // --- 功能函式 ---
 
         function toggleRecognition() {
             if (!recognition) return;
             if (isListening) {
-                isListening = false; // 標記為手動停止
+                isListening = false;
                 recognition.stop();
             } else {
                 recognition.start();
@@ -399,22 +411,16 @@
             mainContainer.scrollTop = mainContainer.scrollHeight;
         }
 
-        // 新增：清除文字函式
         function clearText() {
-            // 檢查是否有內容，避免空的時候誤按也跳提示(選用，這裡我為了安全都跳提示)
             if (outputDiv.innerText === "" && interimDiv.innerText === "") return;
-
             if (confirm("確定要清除所有對話記錄嗎？")) {
                 outputDiv.innerHTML = "";
                 interimDiv.innerText = "";
-                
-                // 顯示一個短暫的提示狀態
                 const originalText = statusText.innerText;
                 statusText.innerText = "已清除";
                 setTimeout(() => {
-                    // 如果還在聆聽，恢復為正在聆聽，否則恢復為已暫停/就緒
                     if (isListening) {
-                        statusText.innerText = "正在聆聽";
+                        statusText.innerText = "正在聆聽 (" + getLangLabel(recognition.lang) + ")";
                     } else {
                         statusText.innerText = "就緒";
                     }
@@ -425,27 +431,20 @@
         function copyText() {
             const text = outputDiv.innerText + "\n" + interimDiv.innerText;
             if (!text.trim()) return;
-            
             navigator.clipboard.writeText(text).then(() => {
                 const originalText = statusText.innerText;
                 statusText.innerText = "已複製！";
                 setTimeout(() => {
                     if(statusText.innerText === "已複製！") statusText.innerText = originalText;
                 }, 2000);
-            }).catch(err => {
-                console.error('複製失敗', err);
-            });
+            }).catch(err => console.error(err));
         }
 
         function shareText() {
             const text = outputDiv.innerText + "\n" + interimDiv.innerText;
             if (!text.trim()) return;
-
             if (navigator.share) {
-                navigator.share({
-                    title: '語音轉錄內容',
-                    text: text,
-                }).catch(console.error);
+                navigator.share({ title: '語音轉錄內容', text: text }).catch(console.error);
             } else {
                 copyText();
                 alert("內容已複製到剪貼簿。");
@@ -470,16 +469,36 @@
             localStorage.setItem('stt-theme', theme);
         }
 
-        // --- 螢幕恆亮 API (Wake Lock) ---
+        // 新增：更新語言邏輯
+        function updateLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('stt-lang', lang);
+            
+            if (recognition) {
+                recognition.lang = lang;
+                // 如果正在聆聽，需要重啟才能套用新語言
+                if (isListening) {
+                    recognition.stop(); 
+                    // onend 事件會檢測 isListening = true 並自動重啟，
+                    // 重啟時會抓取新的 recognition.lang
+                }
+            }
+        }
+
+        function getLangLabel(code) {
+            if(code.includes('zh')) return "中文";
+            if(code.includes('en')) return "英文";
+            if(code.includes('ja')) return "日文";
+            if(code.includes('ko')) return "韓文";
+            return "";
+        }
+
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
-                    console.log('螢幕恆亮已啟用');
                 }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
-            }
+            } catch (err) { console.error(err); }
         }
 
         function releaseWakeLock() {
@@ -489,18 +508,27 @@
             }
         }
 
-        // --- 初始化載入設定 ---
         window.onload = function() {
+            // 載入字體
             const savedFont = localStorage.getItem('stt-font-size');
             if(savedFont) {
                 updateFontSize(savedFont);
                 document.getElementById('font-size-slider').value = savedFont;
             }
 
+            // 載入主題
             const savedTheme = localStorage.getItem('stt-theme');
             if(savedTheme) {
                 const btn = document.querySelector(`.theme-btn[onclick*="'${savedTheme}'"]`);
                 if(btn) setTheme(savedTheme, btn);
+            }
+
+            // 載入語言
+            const savedLang = localStorage.getItem('stt-lang');
+            if(savedLang) {
+                document.getElementById('lang-select').value = savedLang;
+                currentLang = savedLang;
+                if(recognition) recognition.lang = savedLang;
             }
         }
     </script>
