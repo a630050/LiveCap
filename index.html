@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>即時語音轉錄助手</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --interim-color: #9ca3af;
+            --accent-color: #2563eb;
+            --btn-text: #ffffff;
+            --font-size: 24px;
+            --line-height: 1.6;
+        }
+
+        /* Dark Mode Variables */
+        [data-theme="dark"] {
+            --bg-color: #111827;
+            --text-color: #f3f4f6;
+            --interim-color: #6b7280;
+            --accent-color: #3b82f6;
+        }
+
+        /* High Contrast Mode Variables */
+        [data-theme="yellow"] {
+            --bg-color: #000000;
+            --text-color: #ffff00;
+            --interim-color: #b3b300;
+            --accent-color: #ffff00;
+            --btn-text: #000000;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100dvh; /* Dynamic Viewport Height */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Header Area */
+        header {
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: rgba(0,0,0,0.05);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+
+        .pulse-dot.active {
+            background-color: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .header-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            color: var(--text-color);
+        }
+
+        /* Main Transcription Area */
+        #transcription-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            font-size: var(--font-size);
+            line-height: var(--line-height);
+            scroll-behavior: smooth;
+        }
+
+        .final-text {
+            display: block;
+            margin-bottom: 1.5rem; /* 空一行以增加閱讀體驗 */
+            word-break: break-word;
+        }
+
+        .interim-text {
+            color: var(--interim-color);
+            font-style: italic;
+            display: inline;
+        }
+
+        /* Floating Action Buttons (Bottom Right) */
+        .fab-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background-color: var(--accent-color);
+            color: var(--btn-text);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 24px;
+            transition: transform 0.1s;
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+        }
+
+        .fab.secondary {
+            width: 48px;
+            height: 48px;
+            background-color: #4b5563;
+            font-size: 20px;
+        }
+        
+        [data-theme="yellow"] .fab.secondary {
+             background-color: #b3b300;
+        }
+
+        /* Settings Modal */
+        #settings-modal {
+            border: none;
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 400px;
+            background: var(--bg-color);
+            color: var(--text-color);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        [data-theme="yellow"] #settings-modal {
+            border: 2px solid yellow;
+        }
+
+        #settings-modal::backdrop {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .setting-group {
+            margin-bottom: 20px;
+        }
+
+        .setting-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .theme-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .theme-btn {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: white;
+            color: black;
+            cursor: pointer;
+        }
+        
+        .theme-btn.active {
+            border: 2px solid var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* Range Slider */
+        input[type=range] {
+            width: 100%;
+            height: 6px;
+            background: #ddd;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        /* Toolbar (Top) */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-pill {
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--text-color);
+            background: transparent;
+            color: var(--text-color);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Hidden elements */
+        .hidden { display: none; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="status-indicator">
+            <div id="mic-status" class="pulse-dot"></div>
+            <span id="status-text">準備就緒</span>
+        </div>
+        <div class="toolbar">
+            <button class="btn-pill" onclick="copyText()">複製</button>
+            <button class="btn-pill" onclick="shareText()">分享</button>
+            <button class="header-btn" onclick="openSettings()">⚙️</button>
+        </div>
+    </header>
+
+    <main id="transcription-container">
+        <div id="output"></div>
+        <div id="interim" class="interim-text"></div>
+    </main>
+
+    <!-- Floating Action Button for Mic -->
+    <div class="fab-container">
+        <button id="toggle-btn" class="fab" onclick="toggleRecognition()">
+            🎤
+        </button>
+    </div>
+
+    <!-- Settings Modal -->
+    <dialog id="settings-modal">
+        <h3 style="margin-top:0">設定</h3>
+        
+        <div class="setting-group">
+            <label class="setting-label">字體大小 (<span id="font-val">24</span>px)</label>
+            <input type="range" min="16" max="60" value="24" id="font-size-slider" oninput="updateFontSize(this.value)">
+        </div>
+
+        <div class="setting-group">
+            <label class="setting-label">顯示模式</label>
+            <div class="theme-options">
+                <button class="theme-btn active" onclick="setTheme('light', this)">亮色</button>
+                <button class="theme-btn" style="background:#1f2937; color:white;" onclick="setTheme('dark', this)">暗色</button>
+                <button class="theme-btn" style="background:black; color:yellow; border-color:yellow;" onclick="setTheme('yellow', this)">高對比</button>
+            </div>
+        </div>
+
+        <div style="text-align: right;">
+            <button class="btn-pill" style="background:var(--accent-color); color:var(--btn-text); border:none;" onclick="document.getElementById('settings-modal').close()">完成</button>
+        </div>
+    </dialog>
+
+    <script>
+        // --- 變數初始化 ---
+        const outputDiv = document.getElementById('output');
+        const interimDiv = document.getElementById('interim');
+        const statusText = document.getElementById('status-text');
+        const micStatus = document.getElementById('mic-status');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const mainContainer = document.getElementById('transcription-container');
+
+        let recognition;
+        let isListening = false;
+        let wakeLock = null;
+
+        // --- 語音辨識設定 (Web Speech API) ---
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true; // 持續辨識
+            recognition.interimResults = true; // 顯示中間結果
+            recognition.lang = 'zh-TW'; // 設定語言
+
+            recognition.onstart = function() {
+                isListening = true;
+                statusText.innerText = "正在聆聽...";
+                micStatus.classList.add('active');
+                toggleBtn.innerHTML = "⬛"; // 顯示停止圖示
+                toggleBtn.style.backgroundColor = "#ef4444";
+                requestWakeLock(); // 防止螢幕休眠
+            };
+
+            recognition.onend = function() {
+                // 自動重連機制：如果是我們手動停止的(isListening=false)，就不重啟
+                // 如果是瀏覽器自己斷掉的，但我們還想聽(isListening=true)，就重啟
+                if (isListening) {
+                    console.log("連線中斷，嘗試重新啟動...");
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.error("重啟失敗:", e);
+                    }
+                } else {
+                    statusText.innerText = "已暫停";
+                    micStatus.classList.remove('active');
+                    toggleBtn.innerHTML = "🎤";
+                    toggleBtn.style.backgroundColor = "var(--accent-color)";
+                    releaseWakeLock();
+                }
+            };
+
+            recognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                // 處理落地文字 (Final)
+                if (finalTranscript) {
+                    const p = document.createElement('div');
+                    p.className = 'final-text';
+                    p.innerText = finalTranscript;
+                    outputDiv.appendChild(p);
+                }
+
+                // 處理未落地文字 (Interim)
+                interimDiv.innerText = interimTranscript;
+
+                // 自動捲動到底部
+                scrollToBottom();
+            };
+
+            recognition.onerror = function(event) {
+                console.error("語音辨識錯誤", event.error);
+                if(event.error === 'no-speech') {
+                    // 沒聲音不顯示錯誤，靜靜地忽略
+                } else {
+                    statusText.innerText = "錯誤: " + event.error;
+                }
+            };
+
+        } else {
+            alert("您的瀏覽器不支援語音辨識功能，請使用 Chrome, Edge 或 Safari。");
+        }
+
+        // --- 功能函式 ---
+
+        function toggleRecognition() {
+            if (!recognition) return;
+            if (isListening) {
+                isListening = false; // 標記為手動停止
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        function scrollToBottom() {
+            mainContainer.scrollTop = mainContainer.scrollHeight;
+        }
+
+        function copyText() {
+            const text = outputDiv.innerText + "\n" + interimDiv.innerText;
+            if (!text.trim()) return;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = statusText.innerText;
+                statusText.innerText = "已複製！";
+                setTimeout(() => statusText.innerText = originalText, 2000);
+            }).catch(err => {
+                console.error('複製失敗', err);
+            });
+        }
+
+        function shareText() {
+            const text = outputDiv.innerText + "\n" + interimDiv.innerText;
+            if (!text.trim()) return;
+
+            if (navigator.share) {
+                navigator.share({
+                    title: '語音轉錄內容',
+                    text: text,
+                }).catch(console.error);
+            } else {
+                // 如果不支援原生分享，就執行複製
+                copyText();
+                alert("您的瀏覽器不支援原生分享，內容已複製到剪貼簿。");
+            }
+        }
+
+        // --- 設定相關 ---
+        function openSettings() {
+            document.getElementById('settings-modal').showModal();
+        }
+
+        function updateFontSize(val) {
+            document.documentElement.style.setProperty('--font-size', val + 'px');
+            document.getElementById('font-val').innerText = val;
+            localStorage.setItem('stt-font-size', val);
+        }
+
+        function setTheme(theme, btn) {
+            document.documentElement.setAttribute('data-theme', theme);
+            document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            localStorage.setItem('stt-theme', theme);
+        }
+
+        // --- 螢幕恆亮 API (Wake Lock) ---
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('螢幕恆亮已啟用');
+                }
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
+        // --- 初始化載入設定 ---
+        window.onload = function() {
+            const savedFont = localStorage.getItem('stt-font-size');
+            if(savedFont) {
+                updateFontSize(savedFont);
+                document.getElementById('font-size-slider').value = savedFont;
+            }
+
+            const savedTheme = localStorage.getItem('stt-theme');
+            if(savedTheme) {
+                const btn = document.querySelector(`.theme-btn[onclick*="'${savedTheme}'"]`);
+                if(btn) setTheme(savedTheme, btn);
+            }
+        }
+    </script>
+</body>
+</html>
