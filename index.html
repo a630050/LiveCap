@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>即時語音轉錄助手</title>
+    <title>LiveCap 即時語音轉錄</title>
     <style>
         :root {
             --bg-color: #ffffff;
@@ -68,6 +68,10 @@
             gap: 8px;
             font-size: 14px;
             font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 30%; /* 防止狀態文字太長擠壓按鈕 */
         }
 
         .pulse-dot {
@@ -75,6 +79,7 @@
             height: 10px;
             border-radius: 50%;
             background-color: #ccc;
+            flex-shrink: 0;
         }
 
         .pulse-dot.active {
@@ -95,6 +100,9 @@
             padding: 8px;
             border-radius: 50%;
             color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         /* Main Transcription Area */
@@ -131,8 +139,8 @@
         }
 
         .fab {
-            width: 56px;
-            height: 56px;
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
             border: none;
             background-color: var(--accent-color);
@@ -142,23 +150,12 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 24px;
+            font-size: 28px;
             transition: transform 0.1s;
         }
 
         .fab:active {
             transform: scale(0.95);
-        }
-
-        .fab.secondary {
-            width: 48px;
-            height: 48px;
-            background-color: #4b5563;
-            font-size: 20px;
-        }
-        
-        [data-theme="yellow"] .fab.secondary {
-             background-color: #b3b300;
         }
 
         /* Settings Modal */
@@ -223,7 +220,8 @@
         /* Toolbar (Top) */
         .toolbar {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            align-items: center;
         }
 
         .btn-pill {
@@ -236,11 +234,13 @@
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 5px;
+            justify-content: center;
+            white-space: nowrap;
         }
-
-        /* Hidden elements */
-        .hidden { display: none; }
+        
+        .btn-pill:active {
+            background-color: rgba(0,0,0,0.05);
+        }
 
     </style>
 </head>
@@ -249,9 +249,11 @@
     <header>
         <div class="status-indicator">
             <div id="mic-status" class="pulse-dot"></div>
-            <span id="status-text">準備就緒</span>
+            <span id="status-text">就緒</span>
         </div>
         <div class="toolbar">
+            <!-- 新增的清除按鈕 -->
+            <button class="btn-pill" onclick="clearText()">清除</button>
             <button class="btn-pill" onclick="copyText()">複製</button>
             <button class="btn-pill" onclick="shareText()">分享</button>
             <button class="header-btn" onclick="openSettings()">⚙️</button>
@@ -316,7 +318,7 @@
 
             recognition.onstart = function() {
                 isListening = true;
-                statusText.innerText = "正在聆聽...";
+                statusText.innerText = "正在聆聽";
                 micStatus.classList.add('active');
                 toggleBtn.innerHTML = "⬛"; // 顯示停止圖示
                 toggleBtn.style.backgroundColor = "#ef4444";
@@ -324,8 +326,7 @@
             };
 
             recognition.onend = function() {
-                // 自動重連機制：如果是我們手動停止的(isListening=false)，就不重啟
-                // 如果是瀏覽器自己斷掉的，但我們還想聽(isListening=true)，就重啟
+                // 自動重連機制
                 if (isListening) {
                     console.log("連線中斷，嘗試重新啟動...");
                     try {
@@ -372,7 +373,7 @@
             recognition.onerror = function(event) {
                 console.error("語音辨識錯誤", event.error);
                 if(event.error === 'no-speech') {
-                    // 沒聲音不顯示錯誤，靜靜地忽略
+                    // 忽略無聲錯誤
                 } else {
                     statusText.innerText = "錯誤: " + event.error;
                 }
@@ -398,6 +399,29 @@
             mainContainer.scrollTop = mainContainer.scrollHeight;
         }
 
+        // 新增：清除文字函式
+        function clearText() {
+            // 檢查是否有內容，避免空的時候誤按也跳提示(選用，這裡我為了安全都跳提示)
+            if (outputDiv.innerText === "" && interimDiv.innerText === "") return;
+
+            if (confirm("確定要清除所有對話記錄嗎？")) {
+                outputDiv.innerHTML = "";
+                interimDiv.innerText = "";
+                
+                // 顯示一個短暫的提示狀態
+                const originalText = statusText.innerText;
+                statusText.innerText = "已清除";
+                setTimeout(() => {
+                    // 如果還在聆聽，恢復為正在聆聽，否則恢復為已暫停/就緒
+                    if (isListening) {
+                        statusText.innerText = "正在聆聽";
+                    } else {
+                        statusText.innerText = "就緒";
+                    }
+                }, 1500);
+            }
+        }
+
         function copyText() {
             const text = outputDiv.innerText + "\n" + interimDiv.innerText;
             if (!text.trim()) return;
@@ -405,7 +429,9 @@
             navigator.clipboard.writeText(text).then(() => {
                 const originalText = statusText.innerText;
                 statusText.innerText = "已複製！";
-                setTimeout(() => statusText.innerText = originalText, 2000);
+                setTimeout(() => {
+                    if(statusText.innerText === "已複製！") statusText.innerText = originalText;
+                }, 2000);
             }).catch(err => {
                 console.error('複製失敗', err);
             });
@@ -421,9 +447,8 @@
                     text: text,
                 }).catch(console.error);
             } else {
-                // 如果不支援原生分享，就執行複製
                 copyText();
-                alert("您的瀏覽器不支援原生分享，內容已複製到剪貼簿。");
+                alert("內容已複製到剪貼簿。");
             }
         }
 
